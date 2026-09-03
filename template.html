@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PANOPTES: AI risk governance and assurance dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1C2733; --paper:#FAFBF9; --panel:#FFFFFF; --line:#D8DEE3; --line-soft:#E8ECEF;
+  --muted:#5B6B7A; --focus:#144A74;
+  --crit:#A6242F; --high:#C4670A; --med:#8A7000; --low:#5B6B7A; --pass:#1E7A5A;
+  --crit-bg:#F9EAEB; --high-bg:#FAF0E2; --med-bg:#F7F3DC; --low-bg:#EDF0F3; --pass-bg:#E6F2ED;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{background:var(--paper);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;line-height:1.5}
+a{color:var(--focus)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.masthead{border-bottom:3px solid var(--ink);background:var(--panel)}
+.masthead-inner{max-width:1180px;margin:0 auto;padding:2.2rem 1.5rem 1.4rem}
+h1{font-family:"Source Serif 4",Georgia,serif;font-weight:650;font-size:2.1rem;letter-spacing:.01em}
+.masthead p.role{font-size:1.02rem;color:var(--muted);margin-top:.25rem;max-width:62ch}
+.runmeta{display:flex;flex-wrap:wrap;gap:.4rem 2.2rem;margin-top:1.1rem;font-size:.86rem}
+.runmeta div span{display:block}
+.runmeta .k{color:var(--muted)}
+.runmeta .v{font-weight:600}
+.scopebar{background:var(--ink);color:#EDF2F6;font-size:.85rem;padding:.55rem 1.5rem}
+.scopebar-inner{max-width:1180px;margin:0 auto}
+.scopebar strong{color:#fff}
+
+nav{border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+.tabs{max-width:1180px;margin:0 auto;padding:0 1.5rem;display:flex;gap:.25rem;overflow-x:auto}
+.tab{padding:.8rem 1.1rem .65rem;border-bottom:3px solid transparent;font-weight:600;font-size:.95rem;color:var(--muted);white-space:nowrap}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
+.tab:hover{color:var(--ink)}
+
+main{max-width:1180px;margin:0 auto;padding:1.6rem 1.5rem 4rem}
+section[hidden]{display:none}
+h2{font-family:"Source Serif 4",Georgia,serif;font-weight:650;font-size:1.45rem;margin-bottom:.35rem}
+.lede{color:var(--muted);max-width:72ch;margin-bottom:1.4rem;font-size:.95rem}
+
+/* Indicator strip: one band divided by rules, not cards */
+.kri-strip{display:grid;grid-template-columns:repeat(5,1fr);border-top:2px solid var(--ink);border-bottom:1px solid var(--line);background:var(--panel);margin-bottom:2rem}
+.kri{padding:1.1rem 1.2rem 1rem;border-left:1px solid var(--line-soft)}
+.kri:first-child{border-left:none}
+.kri .num{font-family:"Source Serif 4",Georgia,serif;font-size:2.3rem;font-weight:650;line-height:1;font-variant-numeric:tabular-nums}
+.kri .lbl{font-size:.85rem;color:var(--muted);margin-top:.35rem;line-height:1.3}
+.kri.alert .num{color:var(--crit)}
+.kri.warn .num{color:var(--high)}
+.kri.good .num{color:var(--pass)}
+
+table{width:100%;border-collapse:collapse;background:var(--panel);font-size:.9rem}
+thead th{text-align:left;font-size:.8rem;color:var(--muted);font-weight:600;border-bottom:2px solid var(--ink);padding:.5rem .6rem;cursor:pointer;user-select:none;white-space:nowrap}
+thead th .arrow{font-size:.7rem}
+tbody td{border-bottom:1px solid var(--line-soft);padding:.55rem .6rem;vertical-align:top}
+tbody tr:hover{background:#F3F6F8}
+tbody tr.expandable{cursor:pointer}
+tr.detail td{background:#F6F8F9;border-bottom:1px solid var(--line);padding:.8rem 1rem}
+tr.detail .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:.4rem 2rem;font-size:.87rem;max-width:80ch}
+tr.detail .detail-grid .k{color:var(--muted)}
+
+.chip{display:inline-block;font-size:.76rem;font-weight:700;padding:.1rem .5rem;border-radius:2px;letter-spacing:.02em}
+.sev-critical{background:var(--crit-bg);color:var(--crit)}
+.sev-high{background:var(--high-bg);color:var(--high)}
+.sev-medium{background:var(--med-bg);color:var(--med)}
+.sev-low{background:var(--low-bg);color:var(--low)}
+.st-verified,.st-closed{background:var(--pass-bg);color:var(--pass)}
+.st-open{background:var(--low-bg);color:var(--ink)}
+.st-in_remediation{background:#E4EDF5;color:var(--focus)}
+.src-real{background:var(--pass-bg);color:var(--pass)}
+.src-syn{background:#EEE9F5;color:#5B4A80}
+.overdue-pill{color:var(--crit);font-weight:700}
+
+.filters{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;align-items:center}
+.filters select,.filters input[type=search]{font:inherit;font-size:.88rem;padding:.35rem .5rem;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:2px}
+.filters .count{margin-left:auto;font-size:.85rem;color:var(--muted)}
+
+/* Coverage matrix, the centrepiece */
+.matrix-wrap{overflow-x:auto;border-top:2px solid var(--ink);background:var(--panel);padding-bottom:.5rem}
+.matrix{border-collapse:collapse;width:100%;min-width:860px}
+.matrix th,.matrix td{border-bottom:1px solid var(--line-soft);padding:.6rem .7rem;font-size:.87rem;text-align:left}
+.matrix thead th{border-bottom:2px solid var(--ink);color:var(--muted);font-size:.8rem;cursor:default}
+.matrix .cat{font-weight:600}
+.matrix .ref{font-size:.82rem;color:var(--muted)}
+.covcell{text-align:center!important;font-weight:700}
+.covcell.pass{background:var(--pass-bg);color:var(--pass)}
+.covcell.finding{background:var(--high-bg);color:var(--high)}
+.rmf-band{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--line);margin-top:1.6rem;background:var(--panel)}
+.rmf{padding:1rem 1.1rem;border-left:1px solid var(--line-soft)}
+.rmf:first-child{border-left:none}
+.rmf h3{font-size:1rem;font-family:"Source Serif 4",Georgia,serif}
+.rmf .sub{font-size:.83rem;color:var(--muted);margin-top:.3rem}
+.rmf.gap{background:repeating-linear-gradient(45deg,#FAFBF9,#FAFBF9 6px,#F1EDE3 6px,#F1EDE3 7px)}
+.rmf.gap .sub strong{color:var(--high)}
+.note{font-size:.85rem;color:var(--muted);margin-top:.8rem;max-width:80ch}
+
+.esc-path{display:flex;gap:.5rem;align-items:center;margin-bottom:1.2rem;font-size:.9rem;flex-wrap:wrap}
+.esc-step{border:1px solid var(--line);background:var(--panel);padding:.35rem .8rem;font-weight:600}
+.esc-sep{color:var(--muted)}
+
+footer{border-top:1px solid var(--line);background:var(--panel)}
+.foot-inner{max-width:1180px;margin:0 auto;padding:1.4rem 1.5rem;font-size:.85rem;color:var(--muted);max-width:1180px}
+.foot-inner p{max-width:90ch;margin-bottom:.4rem}
+
+@media (max-width:860px){
+  .kri-strip{grid-template-columns:repeat(2,1fr)}
+  .kri{border-top:1px solid var(--line-soft)}
+  .rmf-band{grid-template-columns:repeat(2,1fr)}
+  tr.detail .detail-grid{grid-template-columns:1fr}
+  h1{font-size:1.7rem}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <h1>PANOPTES</h1>
+    <p class="role">AI risk governance and assurance dashboard. Risk register, key risk indicators, framework coverage and escalation monitoring over adversarial test evidence.</p>
+    <div class="runmeta" id="runmeta"></div>
+  </div>
+</header>
+<div class="scopebar"><div class="scopebar-inner"><strong>Reference implementation.</strong> Real evidence: HERMES adversarial run against the ARGUS reference agent. All items marked synthetic are fictional, scoped to fictional systems. Zero personally identifiable information. Independent portfolio artifact, not employer work.</div></div>
+
+<nav aria-label="Views">
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-register" aria-selected="true" data-view="register">Risk register</button>
+    <button class="tab" role="tab" id="tab-indicators" aria-selected="false" data-view="indicators">Key risk indicators</button>
+    <button class="tab" role="tab" id="tab-coverage" aria-selected="false" data-view="coverage">Framework coverage</button>
+    <button class="tab" role="tab" id="tab-escalations" aria-selected="false" data-view="escalations">Escalations</button>
+  </div>
+</nav>
+
+<main>
+  <section id="view-register" role="tabpanel" aria-labelledby="tab-register">
+    <h2>Risk register</h2>
+    <p class="lede">Every record carries its source. Verified rows are real HERMES test evidence; findings are synthetic and fictional. Click a row for treatment detail and framework references. Click a column heading to sort.</p>
+    <div class="filters">
+      <select id="f-severity" aria-label="Filter by severity"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
+      <select id="f-status" aria-label="Filter by status"><option value="">All statuses</option><option value="open">open</option><option value="in_remediation">in remediation</option><option value="closed">closed</option><option value="verified">verified</option></select>
+      <select id="f-source" aria-label="Filter by source"><option value="">All sources</option><option value="real">Real (HERMES)</option><option value="synthetic">Synthetic</option></select>
+      <input type="search" id="f-text" placeholder="Search title or system" aria-label="Search title or system">
+      <span class="count" id="reg-count"></span>
+    </div>
+    <div style="overflow-x:auto"><table id="register-table">
+      <thead><tr>
+        <th data-sort="id">Identifier <span class="arrow"></span></th>
+        <th data-sort="title">Title <span class="arrow"></span></th>
+        <th data-sort="severity">Severity <span class="arrow"></span></th>
+        <th data-sort="system">System <span class="arrow"></span></th>
+        <th data-sort="owner">Accountable owner <span class="arrow"></span></th>
+        <th data-sort="target">Target date <span class="arrow"></span></th>
+        <th data-sort="status">Status <span class="arrow"></span></th>
+        <th data-sort="source">Source <span class="arrow"></span></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section id="view-indicators" role="tabpanel" aria-labelledby="tab-indicators" hidden>
+    <h2>Key risk indicators</h2>
+    <p class="lede">Computed live from the register against the modelled remediation policy, never hard-coded. Policy: severity-tiered service level agreements anchored on a 40-day application-vulnerability clock, maximum three rescan cycles, escalation on breach.</p>
+    <div class="kri-strip" id="kri-strip"></div>
+    <h2 style="font-size:1.15rem">Service level agreement performance by severity</h2>
+    <div style="overflow-x:auto"><table id="sla-table">
+      <thead><tr><th style="cursor:default">Severity</th><th style="cursor:default">Service level agreement</th><th style="cursor:default">Open</th><th style="cursor:default">Overdue</th><th style="cursor:default">Closed within agreement</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="note" id="kri-note"></p>
+  </section>
+
+  <section id="view-coverage" role="tabpanel" aria-labelledby="tab-coverage" hidden>
+    <h2>Framework coverage</h2>
+    <p class="lede">Real data. Each risk category maps to a MITRE ATLAS technique, an OWASP Top 10 for Large Language Model Applications (2025) entry and NIST AI Risk Management Framework subcategories, as encoded in the HERMES attack library. Test results are from the executed run; the findings column counts synthetic register items in the same category.</p>
+    <div class="matrix-wrap"><table class="matrix" id="coverage-matrix">
+      <thead><tr><th>Risk category</th><th>MITRE ATLAS</th><th>OWASP for Large Language Models</th><th>NIST AI Risk Management Framework</th><th style="text-align:center">Tests run</th><th style="text-align:center">Tests passed</th><th style="text-align:center">Open findings</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="rmf-band" id="rmf-band"></div>
+    <p class="note">Coverage of the MAP function is an acknowledged gap in the current test suite: HERMES exercises GOVERN, MEASURE and MANAGE subcategories, while system-context mapping activities sit upstream of adversarial testing. Stating what the evidence does not cover is part of the assurance method.</p>
+  </section>
+
+  <section id="view-escalations" role="tabpanel" aria-labelledby="tab-escalations" hidden>
+    <h2>Escalations</h2>
+    <p class="lede">Items breaching the modelled policy, ordered by days overdue. Escalation follows the defined path; each step is triggered by agreement breach, rescan exhaustion or critical severity ageing.</p>
+    <div class="esc-path"><span class="esc-step">Accountable owner</span><span class="esc-sep">then</span><span class="esc-step">Regional lead</span><span class="esc-sep">then</span><span class="esc-step">Risk committee</span></div>
+    <div style="overflow-x:auto"><table id="esc-table">
+      <thead><tr><th style="cursor:default">Identifier</th><th style="cursor:default">Title</th><th style="cursor:default">Severity</th><th style="cursor:default">Days overdue</th><th style="cursor:default">Rescan cycles used</th><th style="cursor:default">Escalated to</th><th style="cursor:default">Treatment in progress</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+</main>
+
+<footer><div class="foot-inner">
+  <p>PANOPTES is named for Argus Panoptes, the all-seeing watchman: the oversight layer over the ARGUS agent and the HERMES red-team exercise. Built as an independent portfolio artifact by Vanessa Miranda.</p>
+  <p>Evidence: <a href="https://github.com/vanessamiranda/hermes-redteam">HERMES red-team repository</a>. Method and policy definitions: <a href="GOVERNANCE.md">GOVERNANCE.md</a>. Data: <a href="findings.json">findings.json</a>.</p>
+</div></footer>
+
+<script id="panoptes-data" type="application/json">__DATA__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('panoptes-data').textContent);
+const R = DATA.records;
+const FINDINGS = R.filter(r => r.record_type === 'finding');
+const TESTS = R.filter(r => r.record_type === 'assurance_test');
+const SEV_ORDER = {critical: 0, high: 1, medium: 2, low: 3};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Masthead metadata */
+document.getElementById('runmeta').innerHTML = [
+  ['Evidence run', 'HERMES 20260903T011051Z'],
+  ['Generated', DATA.generated],
+  ['Records', `${TESTS.length} real tests, ${FINDINGS.length} synthetic findings`],
+  ['Policy anchor', '40-day agreement, 3 rescans']
+].map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+
+/* Tabs */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== 'view-' + t.dataset.view);
+}));
+
+/* ---------- Risk register ---------- */
+let sortKey = 'severity', sortDir = 1;
+function chip(cls, txt){ return `<span class="chip ${cls}">${esc(txt)}</span>`; }
+function rowsHTML(rows){
+  return rows.map(r => {
+    const src = r.source.startsWith('Synthetic') ? chip('src-syn', 'synthetic') : chip('src-real', 'real evidence');
+    const overdue = r.days_overdue > 0 ? ` <span class="overdue-pill">+${r.days_overdue}d</span>` : '';
+    return `<tr class="expandable" data-id="${esc(r.id)}">
+      <td>${esc(r.id)}</td><td>${esc(r.title)}</td>
+      <td>${chip('sev-' + r.severity, r.severity)}</td>
+      <td>${esc(r.system)}</td><td>${esc(r.owner)}</td>
+      <td>${esc(r.target ?? 'n/a')}${overdue}</td>
+      <td>${chip('st-' + r.status, r.status.replace('_', ' '))}</td>
+      <td>${src}</td></tr>`;
+  }).join('');
+}
+function detailHTML(r){
+  const pairs = [
+    ['Source', r.source], ['Category', r.category.replace(/_/g, ' ')],
+    ['MITRE ATLAS', r.atlas], ['OWASP for Large Language Models', r.owasp],
+    ['NIST AI Risk Management Framework', r.nist],
+    ['Opened', r.opened], ['Closed', r.closed ?? 'not closed'],
+    ['Rescan cycles used', `${r.rescans} of ${DATA.policy.max_rescans}`],
+    ['Escalation', r.escalation], ['Treatment', r.treatment || 'n/a'],
+  ];
+  if (r.verdict) pairs.splice(1, 0, ['Verdict', r.verdict + ' (executed adversarial test)']);
+  return `<tr class="detail"><td colspan="8"><div class="detail-grid">${
+    pairs.map(([k, v]) => `<div><span class="k">${k}: </span>${esc(v)}</div>`).join('')}</div></td></tr>`;
+}
+function currentRows(){
+  const sev = document.getElementById('f-severity').value;
+  const st = document.getElementById('f-status').value;
+  const so = document.getElementById('f-source').value;
+  const q = document.getElementById('f-text').value.toLowerCase();
+  let rows = R.filter(r =>
+    (!sev || r.severity === sev) && (!st || r.status === st) &&
+    (!so || (so === 'real') === !r.source.startsWith('Synthetic')) &&
+    (!q || r.title.toLowerCase().includes(q) || r.system.toLowerCase().includes(q)));
+  rows.sort((a, b) => {
+    let x = a[sortKey], y = b[sortKey];
+    if (sortKey === 'severity'){ x = SEV_ORDER[x]; y = SEV_ORDER[y]; }
+    x = x ?? ''; y = y ?? '';
+    return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
+  });
+  return rows;
+}
+function renderRegister(){
+  const rows = currentRows();
+  document.querySelector('#register-table tbody').innerHTML = rowsHTML(rows);
+  document.getElementById('reg-count').textContent = `${rows.length} of ${R.length} records`;
+  document.querySelectorAll('#register-table thead th').forEach(th => {
+    th.querySelector('.arrow').textContent = th.dataset.sort === sortKey ? (sortDir === 1 ? '▲' : '▼') : '';
+  });
+}
+document.querySelectorAll('#register-table thead th').forEach(th => th.addEventListener('click', () => {
+  if (sortKey === th.dataset.sort) sortDir *= -1; else { sortKey = th.dataset.sort; sortDir = 1; }
+  renderRegister();
+}));
+['f-severity','f-status','f-source','f-text'].forEach(id =>
+  document.getElementById(id).addEventListener('input', renderRegister));
+document.querySelector('#register-table tbody').addEventListener('click', e => {
+  const tr = e.target.closest('tr.expandable'); if (!tr) return;
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains('detail')) { existing.remove(); return; }
+  document.querySelectorAll('#register-table tr.detail').forEach(d => d.remove());
+  const rec = R.find(r => r.id === tr.dataset.id);
+  tr.insertAdjacentHTML('afterend', detailHTML(rec));
+});
+renderRegister();
+
+/* ---------- Key risk indicators (computed, not hard-coded) ---------- */
+const closed = FINDINGS.filter(r => r.closed);
+const open = FINDINGS.filter(r => !r.closed);
+const withinSla = closed.filter(r => r.within_sla).length;
+const pctSla = closed.length ? Math.round(100 * withinSla / closed.length) : 0;
+const openCrit = open.filter(r => r.severity === 'critical').length;
+const overdue = open.filter(r => r.days_overdue > 0);
+const passRate = TESTS.length ? Math.round(100 * TESTS.filter(t => t.verdict === 'PASS').length / TESTS.length) : 0;
+const mttr = closed.length ? (closed.reduce((s, r) => s + r.days_to_close, 0) / closed.length).toFixed(1) : 'n/a';
+const kris = [
+  [pctSla + '%', 'Findings closed within service level agreement', pctSla >= 90 ? 'good' : pctSla >= 75 ? 'warn' : 'alert'],
+  [openCrit, 'Open critical findings', openCrit === 0 ? 'good' : 'alert'],
+  [overdue.length, 'Overdue remediation actions', overdue.length === 0 ? 'good' : 'alert'],
+  [passRate + '%', 'Adversarial retest pass rate (real HERMES evidence)', passRate === 100 ? 'good' : 'warn'],
+  [mttr, 'Mean days to remediate (closed findings)', 'plain'],
+];
+document.getElementById('kri-strip').innerHTML = kris.map(([n, l, cls]) =>
+  `<div class="kri ${cls}"><div class="num">${n}</div><div class="lbl">${l}</div></div>`).join('');
+document.querySelector('#sla-table tbody').innerHTML = ['critical','high','medium','low'].map(s => {
+  const sOpen = open.filter(r => r.severity === s);
+  const sClosed = closed.filter(r => r.severity === s);
+  const sWithin = sClosed.filter(r => r.within_sla).length;
+  return `<tr><td>${chip('sev-' + s, s)}</td><td>${DATA.policy.sla_days[s]} days</td>
+    <td>${sOpen.length}</td><td>${sOpen.filter(r => r.days_overdue > 0).length}</td>
+    <td>${sClosed.length ? sWithin + ' of ' + sClosed.length : 'no closures yet'}</td></tr>`;
+}).join('');
+document.getElementById('kri-note').textContent =
+  `Indicator definitions and thresholds are documented in GOVERNANCE.md. The retest pass rate is computed from the ${TESTS.length} executed HERMES tests; all other indicators are computed from the synthetic findings set against the modelled policy.`;
+
+/* ---------- Framework coverage ---------- */
+const cats = [...new Set(R.map(r => r.category))];
+document.querySelector('#coverage-matrix tbody').innerHTML = cats.map(c => {
+  const t = TESTS.filter(x => x.category === c);
+  const passed = t.filter(x => x.verdict === 'PASS').length;
+  const f = open.filter(x => x.category === c).length;
+  const ref = R.find(x => x.category === c);
+  return `<tr><td class="cat">${esc(c.replace(/_/g, ' '))}</td>
+    <td class="ref">${esc(ref.atlas)}</td><td class="ref">${esc(ref.owasp)}</td><td class="ref">${esc(ref.nist)}</td>
+    <td class="covcell">${t.length}</td>
+    <td class="covcell pass">${passed} of ${t.length}</td>
+    <td class="covcell ${f ? 'finding' : ''}">${f}</td></tr>`;
+}).join('');
+const rmfFns = { GOVERN: [], MAP: [], MEASURE: [], MANAGE: [] };
+R.forEach(r => (r.nist || '').split('/').forEach(part => {
+  const fn = part.trim().split(' ')[0];
+  if (rmfFns[fn] && !rmfFns[fn].includes(part.trim())) rmfFns[fn].push(part.trim());
+}));
+document.getElementById('rmf-band').innerHTML = Object.entries(rmfFns).map(([fn, subs]) =>
+  `<div class="rmf ${subs.length ? '' : 'gap'}"><h3>${fn}</h3><div class="sub">${
+    subs.length ? subs.join(', ') + ' exercised by the test suite' : '<strong>Not covered</strong> by the current suite. Acknowledged gap.'}</div></div>`).join('');
+
+/* ---------- Escalations ---------- */
+const escRows = FINDINGS.filter(r => r.escalation !== 'none' || r.days_overdue > 0)
+  .sort((a, b) => b.days_overdue - a.days_overdue || SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
+document.querySelector('#esc-table tbody').innerHTML = escRows.map(r =>
+  `<tr><td>${esc(r.id)}</td><td>${esc(r.title)}</td>
+   <td>${chip('sev-' + r.severity, r.severity)}</td>
+   <td>${r.days_overdue > 0 ? `<span class="overdue-pill">${r.days_overdue}</span>` : '0'}</td>
+   <td>${r.rescans} of ${DATA.policy.max_rescans}</td>
+   <td>${esc(r.escalation === 'none' ? 'accountable owner (pending)' : r.escalation)}</td>
+   <td>${esc(r.treatment)}</td></tr>`).join('');
+</script>
+</body>
+</html>
