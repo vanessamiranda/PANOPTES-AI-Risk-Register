@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""PANOPTES data builder.
+
+Merges two sources into register-data.json:
+1. REAL: HERMES adversarial test results (run 20260903T011051Z), all executed
+   against the ARGUS reference agent. Recorded as assurance_test records.
+2. SYNTHETIC: clearly labelled fictional findings against fictional systems,
+   so the register, indicator and escalation views have meaningful open,
+   overdue and escalated items to render.
+
+Zero personally identifiable information. No employer data.
+"""
+import json
+from datetime import date
+
+TODAY = date(2026, 9, 3)
+
+CATEGORY_MAP = {
+    "prompt_injection_direct":   {"atlas": "AML.T0051",     "owasp": "LLM01:2025 Prompt Injection",                    "nist": "MEASURE 2.7 / MANAGE 2.2"},
+    "prompt_injection_indirect": {"atlas": "AML.T0051.001", "owasp": "LLM01:2025 Prompt Injection",                    "nist": "MEASURE 2.7 / MANAGE 2.2"},
+    "jailbreak":                 {"atlas": "AML.T0054",     "owasp": "LLM01:2025 Prompt Injection",                    "nist": "MEASURE 2.7"},
+    "system_prompt_extraction":  {"atlas": "AML.T0056",     "owasp": "LLM07:2025 System Prompt Leakage",               "nist": "MEASURE 2.7 / GOVERN 1.5"},
+    "data_leakage":              {"atlas": "AML.T0057",     "owasp": "LLM02:2025 Sensitive Information Disclosure",    "nist": "MEASURE 2.10 / MANAGE 1.3"},
+    "excessive_agency":          {"atlas": "AML.T0048",     "owasp": "LLM06:2025 Excessive Agency",                    "nist": "GOVERN 1.7 / MANAGE 2.3"},
+}
+
+# Modelled remediation policy (see GOVERNANCE.md): 40-day application
+# vulnerability service level agreement and three-rescan discipline as the
+# anchor, extended with severity tiers for demonstration.
+SLA_DAYS = {"critical": 14, "high": 30, "medium": 60, "low": 90}
+MAX_RESCANS = 3
+
+def real_records():
+    run = json.load(open("results_20260903T011051Z.json"))
+    out = []
+    for r in run["results"]:
+        m = CATEGORY_MAP[r["category"]]
+        out.append({
+            "id": f"HERMES-{r['id']}",
+            "record_type": "assurance_test",
+            "source": f"HERMES run {run['run_id']} (real, executed)",
+            "title": r["name"],
+            "category": r["category"],
+            "severity": r["severity"],
+            "system": "ARGUS reference agent",
+            "atlas": m["atlas"], "owasp": m["owasp"], "nist": m["nist"],
+            "verdict": r["verdict"],
+            "status": "verified",
+            "owner": "AI assurance lead",
+            "treatment": "Control tested under adversarial conditions; pass criteria met.",
+            "opened": "2026-09-03", "target": None, "closed": "2026-09-03",
+            "rescans": 0, "escalation": "none",
+        })
+    return out
+
+# ---- Synthetic findings: fictional systems and vendors only. ----
+S = lambda i, title, sev, system, cat, opened, status, closed=None, rescans=0, esc="none", treatment="": {
+    "id": f"SYN-{i:03d}", "record_type": "finding",
+    "source": "Synthetic (fictional, for demonstration)",
+    "title": title, "category": cat, "severity": sev, "system": system,
+    "atlas": CATEGORY_MAP.get(cat, {}).get("atlas"),
+    "owasp": CATEGORY_MAP.get(cat, {}).get("owasp"),
+    "nist": CATEGORY_MAP.get(cat, {}).get("nist"),
+    "verdict": None, "status": status, "owner": OWNERS[i % len(OWNERS)],
+    "treatment": treatment, "opened": opened,
+    "target": None, "closed": closed, "rescans": rescans, "escalation": esc,
+}
+OWNERS = ["Platform engineering lead", "AI assurance lead", "Vendor management lead",
+          "Identity and access lead", "Data protection lead", "Application security lead"]
+
+SYNTH = [
+    S(1,  "Retrieval index ingests documents without provenance tagging", "high",   "ARGUS reference agent", "data_leakage", "2026-06-14", "closed", closed="2026-07-09", rescans=1, treatment="Provenance metadata enforced at ingestion; retest passed."),
+    S(2,  "System prompt stored in world-readable configuration bucket", "critical","ARGUS reference agent", "system_prompt_extraction", "2026-07-02", "closed", closed="2026-07-11", rescans=1, treatment="Bucket policy restricted; secret moved to managed vault."),
+    S(3,  "Agent tool schema permits unbounded batch case approval", "critical",    "ARGUS reference agent", "excessive_agency", "2026-08-01", "in_remediation", rescans=1, esc="regional lead", treatment="Per-call approval cap and human gate being added."),
+    S(4,  "Customer notes field rendered to model without sanitisation", "high",    "ORION storefront (fictional)", "prompt_injection_indirect", "2026-08-10", "in_remediation", treatment="Input encoding and content-isolation wrapper in build."),
+    S(5,  "Model output logs retain raw prompts beyond retention window", "medium", "ORION storefront (fictional)", "data_leakage", "2026-07-20", "in_remediation", treatment="Log retention policy being aligned to data classification."),
+    S(6,  "Stale service accounts with production model access", "high",            "ORION storefront (fictional)", "excessive_agency", "2026-06-28", "closed", closed="2026-08-06", rescans=2, treatment="Quarterly access review cycle instituted; accounts de-provisioned."),
+    S(7,  "Vendor model endpoint lacks contractual red-team clause", "medium",      "Meridian Analytics (fictional vendor)", "excessive_agency", "2026-07-15", "open", esc="owner", treatment="Contract amendment drafted for renewal cycle."),
+    S(8,  "Fine-tuning dataset lineage undocumented", "medium",                     "Meridian Analytics (fictional vendor)", "data_leakage", "2026-08-18", "open", treatment="Dataset card and lineage record requested from vendor."),
+    S(9,  "Jailbreak regression suite not run on model version upgrade", "high",    "ARGUS reference agent", "jailbreak", "2026-08-22", "open", treatment="Regression gate being added to release checklist."),
+    S(10, "Guardrail bypass via translated instruction payloads", "high",           "ORION storefront (fictional)", "jailbreak", "2026-07-05", "closed", closed="2026-08-02", rescans=1, treatment="Language-agnostic policy classifier deployed; retest passed."),
+    S(11, "Agent can amend audit ledger entries post-write", "critical",            "ARGUS reference agent", "excessive_agency", "2026-05-30", "closed", closed="2026-06-12", rescans=1, treatment="Ledger made append-only with hash chaining; retest passed."),
+    S(12, "Third-party plugin requests scopes beyond declared purpose", "high",     "Meridian Analytics (fictional vendor)", "excessive_agency", "2026-08-05", "in_remediation", esc="regional lead", treatment="Scope reduction agreed; awaiting vendor release."),
+    S(13, "Prompt template repository lacks change approval workflow", "medium",    "ARGUS reference agent", "prompt_injection_direct", "2026-08-25", "open", treatment="Pull-request review gate being configured."),
+    S(14, "Sensitive test data used in evaluation prompts", "critical",             "ORION storefront (fictional)", "data_leakage", "2026-07-28", "in_remediation", rescans=2, esc="risk committee", treatment="Synthetic evaluation corpus being substituted; two rescans failed on residual samples."),
+    S(15, "No rollback runbook for agent policy configuration", "low",              "ARGUS reference agent", "excessive_agency", "2026-06-20", "closed", closed="2026-08-14", treatment="Runbook authored and tabletop-tested."),
+    S(16, "Uploaded document parser executes embedded macros", "critical",          "ORION storefront (fictional)", "prompt_injection_indirect", "2026-08-15", "in_remediation", rescans=1, esc="regional lead", treatment="Macro stripping at ingestion; retest scheduled."),
+    S(17, "Model card missing intended-use and limitation statements", "low",       "Meridian Analytics (fictional vendor)", "data_leakage", "2026-07-10", "open", treatment="Documentation requested; low risk, tracked to next review."),
+    S(18, "Agent responds to authority claims made in conversation", "high",        "ORION storefront (fictional)", "prompt_injection_direct", "2026-08-28", "open", treatment="Authority-claim refusal control being ported from ARGUS."),
+]
+
+# ---- Oversight structures: use-case inventory, materiality tiers, ----
+# ---- approval authorities, thresholds, lineage, change control and ----
+# ---- exceptions. All modelled; fictional systems labelled as such. ----
+
+APPROVAL_MATRIX = {
+    "tier_1": {"label": "Tier 1 — high materiality",
+               "definition": "Customer-impacting or regulated-domain decisions; errors carry financial-crime, regulatory or customer-harm consequence.",
+               "deployment_approval": "AI risk committee",
+               "residual_risk_acceptance": "AI risk committee",
+               "independent_validation": "Before production, annually, and on material change",
+               "revalidation_months": 12},
+    "tier_2": {"label": "Tier 2 — medium materiality",
+               "definition": "Customer-facing or vendor-supplied capability without direct regulated decisioning; errors carry reputational or data-handling consequence.",
+               "deployment_approval": "Regional lead, risk committee notified",
+               "residual_risk_acceptance": "Regional lead",
+               "independent_validation": "Before production and on material change",
+               "revalidation_months": 24},
+    "tier_3": {"label": "Tier 3 — low materiality",
+               "definition": "Internal productivity use with human review of all outputs before use; no customer exposure.",
+               "deployment_approval": "Accountable owner",
+               "residual_risk_acceptance": "Accountable owner",
+               "independent_validation": "Owner self-assessment against control checklist",
+               "revalidation_months": None},
+}
+
+INVENTORY = [
+    {"id": "UC-001", "name": "ARGUS KYC/CDD review agent",
+     "source": "Reference implementation (real artifact)",
+     "description": "Multi-agent Know Your Customer / Customer Due Diligence case review reference design: drafts risk assessments with mandatory human review on sanctions hits and Money Laundering Reporting Officer escalation.",
+     "tier": "tier_1",
+     "tier_rationale": "Regulated-domain decision support; a missed sanctions match is a financial-crime control failure.",
+     "lifecycle": "Reference deployment",
+     "owner": "First-line product owner (modelled)",
+     "validation": {"status": "current",
+                    "method": "Independent adversarial challenge: HERMES run 20260903T011051Z (real, executed, 14 tests) plus modelled second-line design review",
+                    "last": "2026-09-03", "next_due": "2027-09-03"},
+     "approval": {"authority": "AI risk committee (modelled)", "date": "2026-08-20", "reference": "APP-2026-014"},
+     "thresholds": [
+         {"metric": "Sanctions-screening false negatives on the synthetic evaluation set", "kind": "performance", "limit": "Zero tolerated", "current": "0", "status": "green"},
+         {"metric": "Human-override rate on agent recommendations, 4-week rolling", "kind": "drift", "limit": "Amber above 12%, red above 20%", "current": "9%", "status": "green"},
+         {"metric": "Retrieval-corpus population stability index", "kind": "drift", "limit": "Amber above 0.10, red above 0.25", "current": "0.07", "status": "green"}],
+     "lineage": [
+         {"stage": "Source", "item": "Synthetic case-file corpus (fictional customers)", "classification": "Confidential (fictional)"},
+         {"stage": "Source", "item": "Demonstration sanctions and watchlist extracts", "classification": "Public demonstration data"},
+         {"stage": "Processing", "item": "Provenance-tagged retrieval index, agent orchestration, deterministic rules layer", "classification": "n/a"},
+         {"stage": "Output", "item": "Case recommendation with rationale; append-only, hash-chained audit ledger", "classification": "Confidential (fictional)"}]},
+
+    {"id": "UC-002", "name": "ORION storefront support assistant (fictional)",
+     "source": "Synthetic (fictional system)",
+     "description": "Fictional customer-support assistant on the ORION storefront: answers order and product queries, hands off to a human on policy or payment topics.",
+     "tier": "tier_2",
+     "tier_rationale": "Customer-facing conversation without regulated decisioning; misstatements carry reputational and data-handling consequence.",
+     "lifecycle": "Production (fictional)",
+     "owner": "Platform engineering lead",
+     "validation": {"status": "overdue",
+                    "method": "Modelled second-line review; adversarial regression suite ported from ARGUS in progress (see finding SYN-018)",
+                    "last": "2025-08-10", "next_due": "2026-08-10"},
+     "approval": {"authority": "Regional lead (modelled)", "date": "2025-07-28", "reference": "APP-2025-031"},
+     "thresholds": [
+         {"metric": "Unresolved-handoff rate (conversations ending without answer or handoff)", "kind": "performance", "limit": "Amber above 6%, red above 10%", "current": "4%", "status": "green"},
+         {"metric": "Input-topic distribution drift versus launch baseline", "kind": "drift", "limit": "Amber above 0.10, red above 0.25", "current": "0.14", "status": "amber"},
+         {"metric": "Customer-complaint rate attributable to assistant responses", "kind": "performance", "limit": "Amber above 0.5 per 1,000 conversations", "current": "0.2 per 1,000", "status": "green"}],
+     "lineage": [
+         {"stage": "Source", "item": "Fictional product catalogue and order-status service", "classification": "Internal (fictional)"},
+         {"stage": "Source", "item": "Customer conversation input (fictional)", "classification": "Confidential (fictional)"},
+         {"stage": "Processing", "item": "Intent routing, retrieval over catalogue, guarded generation with policy classifier", "classification": "n/a"},
+         {"stage": "Output", "item": "Customer-facing responses; conversation logs under retention schedule (see EXC-002)", "classification": "Confidential (fictional)"}]},
+
+    {"id": "UC-003", "name": "Meridian Analytics sentiment scoring (fictional vendor)",
+     "source": "Synthetic (fictional vendor)",
+     "description": "Fictional vendor-hosted model scoring customer-feedback sentiment for the ORION storefront's quality reporting.",
+     "tier": "tier_2",
+     "tier_rationale": "Vendor-supplied model over customer text; data-handling and contractual-assurance consequence, no direct customer decisioning.",
+     "lifecycle": "Production (fictional)",
+     "owner": "Vendor management lead",
+     "validation": {"status": "current",
+                    "method": "Vendor assurance package reviewed; contractual adversarial-testing clause outstanding (exception EXC-001)",
+                    "last": "2026-05-15", "next_due": "2028-05-15"},
+     "approval": {"authority": "Regional lead (modelled)", "date": "2026-05-20", "reference": "APP-2026-009"},
+     "thresholds": [
+         {"metric": "Agreement with human-labelled monthly sample", "kind": "performance", "limit": "Amber below 85%, red below 75%", "current": "91%", "status": "green"},
+         {"metric": "Score-distribution drift versus onboarding baseline", "kind": "drift", "limit": "Amber above 0.10, red above 0.25", "current": "0.05", "status": "green"}],
+     "lineage": [
+         {"stage": "Source", "item": "Customer feedback text (fictional), minimised before transfer", "classification": "Confidential (fictional)"},
+         {"stage": "Processing", "item": "Vendor-hosted scoring endpoint; fine-tuning lineage requested (finding SYN-008)", "classification": "Vendor-controlled"},
+         {"stage": "Output", "item": "Sentiment scores in quality reporting", "classification": "Internal (fictional)"}]},
+
+    {"id": "UC-004", "name": "HESTIA internal drafting assistant (fictional)",
+     "source": "Synthetic (fictional system)",
+     "description": "Fictional internal assistant drafting first-pass operational documents; every output reviewed by its requester before use.",
+     "tier": "tier_3",
+     "tier_rationale": "Internal productivity only; mandatory human review of all outputs before use; no customer exposure.",
+     "lifecycle": "Production (fictional)",
+     "owner": "AI assurance lead",
+     "validation": {"status": "current",
+                    "method": "Owner self-assessment against the tier 3 control checklist",
+                    "last": "2026-07-01", "next_due": None},
+     "approval": {"authority": "Accountable owner (modelled)", "date": "2026-06-25", "reference": "APP-2026-011"},
+     "thresholds": [
+         {"metric": "Sensitive-data patterns detected in prompts, weekly scan", "kind": "performance", "limit": "Amber above 0, red above 5", "current": "0", "status": "green"}],
+     "lineage": [
+         {"stage": "Source", "item": "Employee prompts and internal templates (fictional)", "classification": "Internal (fictional)"},
+         {"stage": "Processing", "item": "Hosted model, no fine-tuning, no retention beyond session", "classification": "n/a"},
+         {"stage": "Output", "item": "Draft documents, human-reviewed before use", "classification": "Internal (fictional)"}]},
+]
+
+CHANGES = [
+    {"id": "CHG-001", "use_case": "UC-001", "date": "2026-08-20",
+     "change": "Initial deployment of the ARGUS reference agent", "type": "Deployment",
+     "approval": "AI risk committee (modelled), APP-2026-014",
+     "verification": "HERMES adversarial suite executed 2026-09-03: 14 of 14 passed (real evidence)",
+     "status": "closed"},
+    {"id": "CHG-002", "use_case": "UC-001", "date": "2026-08-22",
+     "change": "Foundation-model version upgrade, v1.3 to v1.4", "type": "Model version",
+     "approval": "Regional lead (modelled)",
+     "verification": "Jailbreak regression suite not re-run before release; raised as finding SYN-009 and gate added to checklist",
+     "status": "closed with finding"},
+    {"id": "CHG-003", "use_case": "UC-001", "date": "2026-08-25",
+     "change": "Prompt-template library restructure", "type": "Prompt / configuration",
+     "approval": "Pending: approval workflow gap raised as finding SYN-013",
+     "verification": "Blocked on approval workflow",
+     "status": "open"},
+    {"id": "CHG-004", "use_case": "UC-002", "date": "2026-08-02",
+     "change": "Language-agnostic policy classifier deployed, remediating SYN-010", "type": "Guardrail / configuration",
+     "approval": "Platform engineering lead (modelled)",
+     "verification": "Category retest passed 2026-08-02",
+     "status": "closed"},
+]
+
+EXCEPTIONS = [
+    {"id": "EXC-001", "use_case": "UC-003", "linked_finding": "SYN-007",
+     "summary": "Vendor contract lacks the adversarial-testing clause the third-party standard requires for tier 2 vendor models",
+     "residual_risk": "medium",
+     "compensating_controls": "Quarterly output sampling against the policy test set; vendor attestation reviewed",
+     "accepted_by": "Regional lead (modelled), per the tier 2 authority matrix",
+     "accepted": "2026-07-22", "review_due": "2026-12-31", "status": "active"},
+    {"id": "EXC-002", "use_case": "UC-002", "linked_finding": "SYN-005",
+     "summary": "Raw prompt logs retained beyond the retention schedule while remediation is in build",
+     "residual_risk": "medium",
+     "compensating_controls": "Log-store access restricted to two named roles; deletion job scheduled with the remediation",
+     "accepted_by": "Regional lead (modelled), per the tier 2 authority matrix",
+     "accepted": "2026-08-01", "review_due": "2026-08-31", "status": "active"},
+    {"id": "EXC-003", "use_case": "UC-001", "linked_finding": None,
+     "summary": "Pilot cohort operated with manual daily threshold review before automated monitoring was wired",
+     "residual_risk": "low",
+     "compensating_controls": "Daily manual review evidenced in the run log",
+     "accepted_by": "AI risk committee (modelled), per the tier 1 authority matrix",
+     "accepted": "2026-06-01", "review_due": "2026-07-01", "status": "closed"},
+]
+
+REPORT = {
+    "period": "Third quarter 2026, to 3 September 2026",
+    "audience": "AI risk committee (modelled)",
+    "prepared_by": "Second-line AI oversight, reference implementation",
+    "posture": ("Overall AI risk posture is stable and within appetite, with two matters requiring committee decision. "
+                "Remediation discipline improved this period: service-level closure rose and mean time to remediate fell. "
+                "Against that, the ORION assistant's independent validation has fallen overdue, one exception has passed its "
+                "review date, and one drift threshold sits amber. Three critical findings remain open, of which one "
+                "(SYN-014, sensitive evaluation data) has exhausted two rescan cycles and is escalated to this committee. "
+                "The first executed adversarial evidence run against the ARGUS reference agent passed 14 of 14 tests."),
+    "prior": {"pct_sla": 71, "open_crit": 2, "overdue": 5, "pass_rate": None,
+              "mttr": 33.5, "validated": 4, "validated_of": 4, "exc_past": 0, "th_amber": 0},
+    "decisions": [
+        {"ref": "EXC-002", "type": "For decision",
+         "item": "ORION prompt-log retention exception is past its 31 August review date",
+         "request": "Close the exception or re-accept with a new expiry",
+         "recommendation": "Re-accept to 30 September, conditional on evidence that the deletion job has run"},
+        {"ref": "UC-002", "type": "For approval",
+         "item": "ORION independent validation overdue since 10 August",
+         "request": "Approve the revalidation plan: adversarial regression suite ported from ARGUS, targeting completion within 30 days",
+         "recommendation": "Approve; interim compensating control is the amber-threshold monitoring already in place"},
+        {"ref": "EXC-001", "type": "For reaffirmation",
+         "item": "Meridian vendor contract lacks the adversarial-testing clause; residual risk accepted 22 July",
+         "request": "Reaffirm the medium residual-risk acceptance through contract renewal on 31 December",
+         "recommendation": "Reaffirm; quarterly output sampling remains in force and is passing"},
+        {"ref": "SYN-013", "type": "For approval",
+         "item": "Prompt-template changes currently lack an approval workflow; change CHG-003 is blocked on this gap",
+         "request": "Approve the pull-request review gate as a permanent change-control requirement for prompt and configuration changes",
+         "recommendation": "Approve; closes the finding and unblocks the change"}],
+    "gaps": [
+        "MAP-function coverage: system-context mapping sits upstream of adversarial testing and is not evidenced by the current suite.",
+        "Single evidence run: trend reporting is against a modelled prior period until a second run is executed.",
+        "No negative-control run yet demonstrating that the test harness detects failures."],
+    "forward": [
+        "Execute a second HERMES evidence run, including a negative control, to replace the modelled prior period with real trend data.",
+        "Complete the ORION revalidation within the approved 30-day window and return its validation state to current.",
+        "Bring the fine-tuning lineage record for the Meridian vendor model (finding SYN-008) to closure before contract renewal."],
+}
+
+def finalize_exceptions(exceptions):
+    for e in exceptions:
+        due = date.fromisoformat(e["review_due"])
+        e["days_past_review"] = max(0, (TODAY - due).days) if e["status"] == "active" else 0
+        if e["status"] == "active" and e["days_past_review"] > 0:
+            e["status"] = "past review"
+    return exceptions
+
+def finalize(records):
+    for r in records:
+        if r["record_type"] == "finding":
+            opened = date.fromisoformat(r["opened"])
+            sla = SLA_DAYS[r["severity"]]
+            target = date.fromordinal(opened.toordinal() + sla)
+            r["target"] = target.isoformat()
+            r["sla_days"] = sla
+            if r["closed"]:
+                closed = date.fromisoformat(r["closed"])
+                r["days_to_close"] = (closed - opened).days
+                r["within_sla"] = r["days_to_close"] <= sla
+                r["days_overdue"] = 0
+            else:
+                r["days_to_close"] = None
+                r["days_overdue"] = max(0, (TODAY - target).days)
+                r["within_sla"] = r["days_overdue"] == 0
+    return records
+
+data = {
+    "generated": TODAY.isoformat(),
+    "scope": "Reference implementation. Real evidence: HERMES adversarial run 20260903T011051Z against the ARGUS reference agent (14 tests). All findings marked synthetic are fictional and scoped to fictional systems. Zero personally identifiable information. Independent portfolio artifact; not employer work.",
+    "policy": {"sla_days": SLA_DAYS, "max_rescans": MAX_RESCANS,
+               "anchor": "Modelled on a 40-day application-vulnerability service level agreement with a maximum of three rescan cycles, extended with severity tiers for demonstration.",
+               "escalation_path": ["owner", "regional lead", "risk committee"]},
+    "approval_matrix": APPROVAL_MATRIX,
+    "inventory": INVENTORY,
+    "changes": CHANGES,
+    "exceptions": finalize_exceptions(EXCEPTIONS),
+    "report": REPORT,
+    "records": finalize(real_records() + SYNTH),
+}
+json.dump(data, open("register-data.json", "w"), indent=1)
+print(f"{len(data['records'])} records written")
