@@ -40,7 +40,7 @@ python3 build-register-data.py
 python3 -c "d=open('register-data.json').read().replace('</','<\\\\/'); t=open('dashboard-template.html').read(); open('index.html','w').write(t.replace('__DATA__', d))"
 ```
 
-Deploy: public repository, GitHub Pages from branch `main`, root folder. Live within a couple of minutes at `h[ttps://vanessamiranda/.github.io/PANOPTES-AI-Risk-Register].
+Deploy: public repository, GitHub Pages from branch `main`, root folder. Live within a couple of minutes at `h[ttps://vanessamiranda/.github.io/PANOPTES-AI-Risk-Register/`.
 
 ## Part of a set
 
